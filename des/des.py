@@ -1,10 +1,14 @@
-#!/usr/bin/env python3
+# Original Script by Vipul97
+# Modified and Improved by Basel Al-Dwairi
+# Added Key generation and comments
 
-
-# By Vipul97
-
-
+# Imports
+import time
+from typing import Callable
 import argparse
+import random
+
+# Permutation and S-Box tables
 
 BLOCK_SIZE = 64
 
@@ -122,6 +126,27 @@ FINAL_PERMUTATION_TABLE = [
 ]
 
 
+def timed(func: Callable) -> Callable:
+    """
+    Decorator for timing functions
+    """
+
+    def wrapper(*args, **kwargs):
+        start = time.time()
+        result = func(*args, **kwargs)
+        end = time.time()
+
+        time_taken = end - start
+        print()
+        print(f'Finished in {time_taken} seconds')
+
+        return result
+
+    return wrapper
+
+
+# Converting from one type to another
+
 def hex_to_bin(hex_str: str) -> str:
     return f'{int(hex_str, 16):0{len(hex_str) * 4}b}'
 
@@ -142,37 +167,81 @@ def bin_to_str(bin_str: str) -> str:
         byte_str = bin_str[i:i + 8]
         if byte_str:
             text += chr(int(byte_str, 2))
-    return text.rstrip('\x00')  # Remove the zero padding added during encryption
+    # Remove padding
+    return text.rstrip('\x00')
+
+
+def int_to_hex(num):
+    translation = {
+        0: '0',
+        1: '1',
+        2: '2',
+        3: '3',
+        4: '4',
+        5: '5',
+        6: '6',
+        7: '7',
+        8: '8',
+        9: '9',
+        10: 'A',
+        11: 'B',
+        12: 'C',
+        13: 'D',
+        14: 'E',
+        15: 'F',
+    }
+
+    return translation[num]
 
 
 def pad(bin_str: str) -> str:
+    """
+    Add padding to input
+    """
     padding_length = (BLOCK_SIZE - len(bin_str) % BLOCK_SIZE) % BLOCK_SIZE
     return bin_str + '0' * padding_length
 
 
 def fprint(text, value):
+    """
+    Used for debugging
+    Prints inputs aligned to the center
+    """
     print(f'{text:>22}: {value}')
 
 
 def split_block(block):
+    """
+    Split Blocks in the middle
+    """
+
     mid = len(block) // 2
     return block[:mid], block[mid:]
 
 
 def left_rotate(blocks, n_shifts):
+    """
+    Left rotate by n
+    """
     return [block[n_shifts:] + block[:n_shifts] for block in blocks]
 
 
 def permute(block, table):
+    """
+    Permute block using the given table
+    """
     return ''.join(block[i] for i in table)
 
 
 def gen_subkeys(key):
+    """
+    Generate subkeys from the given key in key.txt
+    """
     left_rotate_order = [1, 1, 2, 2, 2, 2, 2, 2, 1, 2, 2, 2, 2, 2, 2, 1]
     key_permutation = permute(key, KEY_PERMUTATION_TABLE)
 
-    #fprint('KEY', key)
-    #fprint('KEY PERMUTATION', key_permutation)
+    # fprint('KEY', key)
+    # fprint('KEY PERMUTATION', key_permutation)
 
     lk, rk = split_block(key_permutation)
     subkeys = []
@@ -186,10 +255,16 @@ def gen_subkeys(key):
 
 
 def xor(block_1, block_2):
+    """
+    Element wise xor (bit-wise)
+    """
     return f'{int(block_1, 2) ^ int(block_2, 2):0{len(block_1)}b}'
 
 
 def s_box(block):
+    """
+    Get output from S-Boxs
+    """
     output = ''
     for i in range(8):
         sub_str = block[i * 6:i * 6 + 6]
@@ -200,6 +275,10 @@ def s_box(block):
 
 
 def des_round(input_block, subkey):
+    """
+    Normal DES round, call all functions in the correct order
+    """
+
     l, r = split_block(input_block)
     expansion_permutation = permute(r, EXPANSION_PERMUTATION_TABLE)
     xor_with_subkey = xor(expansion_permutation, subkey)
@@ -208,49 +287,70 @@ def des_round(input_block, subkey):
     xor_with_left = xor(p_box_output, l)
     output = r + xor_with_left
 
-    #fprint('INPUT', f'{l} {r}')
-    #fprint('SUBKEY', subkey)
-    #fprint('EXPANSION PERMUTATION', expansion_permutation)
-    #fprint('XOR', xor_with_subkey)
-    #fprint('S-BOX SUBSTITUTION', s_box_output)
-    #fprint('P-BOX PERMUTATION', p_box_output)
-    #fprint('XOR', xor_with_left)
-    #fprint('SWAP', f'{r} {xor_with_left}')
-    #fprint('OUTPUT', output)
+    # Debugging
+
+    # fprint('INPUT', f'{l} {r}')
+    # fprint('SUBKEY', subkey)
+    # fprint('EXPANSION PERMUTATION', expansion_permutation)
+    # fprint('XOR', xor_with_subkey)
+    # fprint('S-BOX SUBSTITUTION', s_box_output)
+    # fprint('P-BOX PERMUTATION', p_box_output)
+    # fprint('XOR', xor_with_left)
+    # fprint('SWAP', f'{r} {xor_with_left}')
+    # fprint('OUTPUT', output)
 
     return output
 
 
 def des(input_block, subkeys, crypt_type):
+    """
+    DES Algorithm
+    """
+    # Initial permutation of the input
     initial_permutation = permute(input_block, INITIAL_PERMUTATION_TABLE)
 
+    # Debugging
     # print()
     # print()
-    #fprint('BLOCK', input_block)
-    #fprint('INITIAL PERMUTATION', initial_permutation)
+    # fprint('BLOCK', input_block)
+    # fprint('INITIAL PERMUTATION', initial_permutation)
 
+    # Select rounds, reversed order if decrypting
     rounds = range(16) if crypt_type == 'e' else reversed(range(16))
     output = initial_permutation
 
+    # Enumarate over each round
     for i, j in enumerate(rounds, 1):
+        # Debigging
         # print()
         # print(f'ROUND {i}:')
         output = des_round(output, subkeys[j])
 
+    # Swap halves after all rounds are finished
     swap = output[BLOCK_SIZE // 2:] + output[:BLOCK_SIZE // 2]
+    # Final permutation
     final_permutation = permute(swap, FINAL_PERMUTATION_TABLE)
 
+    # Debugging
     # print()
-    #fprint('SWAP', swap)
-    #fprint('FINAL PERMUTATION', final_permutation)
+    # fprint('SWAP', swap)
+    # fprint('FINAL PERMUTATION', final_permutation)
 
+    # Final Answer
     return final_permutation
 
 
-def crypt(mode:str, crypt_type:str, key_file, infile, outfile):
-    in_data = infile.read().strip()
+@timed
+def crypt(crypt_type: str, key_file: str = 'key.txt', infile: str = 'infile.txt', outfile: str = 'outfile.txt'):
+    """
+    Encryption and Decryption
+    """
 
-    # Branching logic: don't text-to-hex convert or pad if we are decrypting ciphertext
+    # Read Input
+    with open(infile, 'r') as f:
+        in_data = f.read().strip()
+
+    # Branching logic : select Encryption or Decryption
     if crypt_type == 'e':
         bin_in_str = pad(hex_to_bin(str_to_hex(in_data)))
         print(f'Message : {in_data}')
@@ -258,77 +358,82 @@ def crypt(mode:str, crypt_type:str, key_file, infile, outfile):
         bin_in_str = hex_to_bin(in_data)
         print(f'Cipher Text : {in_data}')
 
-    subkeys = gen_subkeys(hex_to_bin(key_file.read().strip()))
+    # Read Key
+    with open(key_file, 'r') as f:
+        key = f.read().strip()
+
+    # Generate the round subkeys
+    subkeys = gen_subkeys(hex_to_bin(key))
+
+    # Answer string
     bin_out_str = ''
 
-    if mode == 'ecb':
-        for i in range(0, len(bin_in_str), BLOCK_SIZE):
-            block = bin_in_str[i:i + BLOCK_SIZE]
-            bin_out_str += des(block, subkeys, crypt_type)
-    else:
-        last_block = hex_to_bin(iv_file.read().strip())
+    # Enumarate over each block
+    for i in range(0, len(bin_in_str), BLOCK_SIZE):
+        # Split input into blocks
+        block = bin_in_str[i:i + BLOCK_SIZE]
+        # Operate over each block, and concatenate to get final output
+        bin_out_str += des(block, subkeys, crypt_type)
 
-        for i in range(0, len(bin_in_str), BLOCK_SIZE):
-            block = bin_in_str[i:i + BLOCK_SIZE]
-            if crypt_type == 'e':
-                block = xor(block, last_block)
-
-            output = des(block, subkeys, crypt_type)
-
-            if crypt_type == 'e':
-                last_block = output
-            else:
-                output = xor(output, last_block)
-                last_block = block
-
-            bin_out_str += output
-
-    # Output formatting: write Hex if encrypting, write String if decrypting
+    # Output formatting: write hex if encrypting, write string if decrypting, Save into output file
     if crypt_type == 'e':
-        cipher = f'{int(bin_out_str, 2):0{len(bin_out_str) // 4}X}\n'
-        outfile.write(cipher)
+        cipher = f'{int(bin_out_str, 2):0{len(bin_out_str) // 4}X}'
+        with open(outfile, 'w') as f:
+            f.write(cipher)
+
         print('Cipher Text :', cipher)
     else:
-        outfile.write(bin_to_str(bin_out_str) + '\n')
-        print(f'Original Messsage : {bin_to_str(bin_out_str)}')
+        decipher = bin_to_str(bin_out_str)
+        with open(outfile, 'w') as f:
+            f.write(decipher)
+
+        print(f'Original Messsage : {decipher}')
 
 
-def add_common_arguments(parser):
-    crypt_group = parser.add_mutually_exclusive_group(required=True)
-    crypt_group.add_argument('-e', action='store_const', dest='option', const='e', help='Encrypt the input file.')
-    crypt_group.add_argument('-d', action='store_const', dest='option', const='d', help='Decrypt the input file.')
+@timed
+def generate_key(key_file: str = 'key.txt'):
+    """
+    Key Generation
+    """
+    key_list = []
+    key_length = 16
+    # Generate 16 random ints between 0, and 15 (F)
+    for i in range(key_length):
+        random_int = random.randint(0, 15)
+        key_list.append(int_to_hex(random_int))
 
-    parser.add_argument('key_file', type=argparse.FileType('r'),
-                        help='Path to the text file used as the key for encryption/decryption.')
-    parser.add_argument('infile', type=argparse.FileType('r'),
-                        help='Path to the text file used as input for encryption/decryption.')
-    parser.add_argument('outfile', type=argparse.FileType('w'),
-                        help='Path to the text file where the output will be written.')
+    # Append all Hex into a string
+    key = ''.join(key_list)
+    # Save Key
+    with open(key_file, 'w') as f:
+        f.write(key)
 
-    return parser
+    print(f'Key : {key}')
 
 
 def main():
+    # Parser
     parser = argparse.ArgumentParser(description="DES Encryption/Decryption Tool (ECB Mode)")
 
-    # 1. The mutually exclusive -e or -d flags
+    # Parse script mode
     crypt_group = parser.add_mutually_exclusive_group(required=True)
     crypt_group.add_argument('-e', action='store_const', dest='option', const='e', help='Encrypt the input file.')
     crypt_group.add_argument('-d', action='store_const', dest='option', const='d', help='Decrypt the input file.')
+    crypt_group.add_argument('-g', action='store_const', dest='option', const='g', help='Generate key.')
 
-    # 2. The required file paths
-    parser.add_argument('key_file', type=argparse.FileType('r'),
-                        help='Path to the text file used as the key for encryption/decryption.')
-    parser.add_argument('infile', type=argparse.FileType('r'),
-                        help='Path to the text file used as input for encryption/decryption.')
-    parser.add_argument('outfile', type=argparse.FileType('w'),
-                        help='Path to the text file where the output will be written.')
-
-    # 3. Parse what the user typed
     args = parser.parse_args()
 
-    # 4. Call your crypt function (hardcoding 'ecb' and dropping the IV)
-    crypt('ecb', args.option, args.key_file, args.infile, args.outfile)
+    # Static files
+    key_file = 'key.txt'
+    infile = 'infile.txt'
+    outfile = 'outfile.txt'
+
+    # Execute script
+    if args.option == 'g':
+        generate_key(key_file)
+    else:
+        crypt(args.option, key_file, infile, outfile)
+
 
 if __name__ == '__main__':
     main()
